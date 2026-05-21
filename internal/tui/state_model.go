@@ -942,7 +942,7 @@ func (m *StateModel) renderDetailContent() string {
 		}
 		taintedBadge := ""
 		if strings.Contains(block, "(tainted)") {
-			taintedBadge = lipgloss.NewStyle().Foreground(lipgloss.Color("#f9e2af")).Bold(true).Render("⊗ ") 
+			taintedBadge = lipgloss.NewStyle().Foreground(updateColor).Bold(true).Render("⊗ ")
 		}
 		headerStyle := lipgloss.NewStyle().Foreground(headerColor).Bold(true)
 		b.WriteString(mutedColor.Render(symbol))
@@ -1010,7 +1010,7 @@ func (m *StateModel) renderList() string {
 		}
 		taintBadge := ""
 		if m.tainted[addr] {
-			taintBadge = lipgloss.NewStyle().Foreground(lipgloss.Color("#f9e2af")).Bold(true).Render(" ⊗")
+			taintBadge = lipgloss.NewStyle().Foreground(updateColor).Bold(true).Render(" ⊗")
 		}
 		addrStyle := stateAddressStyle(addr)
 		line := marker + addr + taintBadge
@@ -1061,7 +1061,7 @@ func (m StateModel) View() string {
 	b.WriteString("\n")
 	help := "j/k: navigate • g/G: first/last • pgup/pgdn: page • Space: select • Ctrl+Space: range • Enter: show • t: taint • u: untaint • d/x: rm • /: search • f: sort • Esc: clear • q: quit"
 	if m.flashMsg != "" {
-		flashStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#a6e3a1")).Bold(true)
+		flashStyle := lipgloss.NewStyle().Foreground(createColor).Bold(true)
 		help = flashStyle.Render("✓ "+m.flashMsg) + "  " + helpStyle.Render(help)
 	} else {
 		help = helpStyle.Render(help)
@@ -1094,7 +1094,7 @@ func (m StateModel) viewDetail() string {
 		help = m.detailCopyFeedback + " • " + help
 	}
 	if m.flashMsg != "" {
-		flashStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#a6e3a1")).Bold(true)
+		flashStyle := lipgloss.NewStyle().Foreground(createColor).Bold(true)
 		help = flashStyle.Render("✓ "+m.flashMsg) + "  " + help
 	}
 	b.WriteString(helpStyle.Render(help))
@@ -1114,10 +1114,10 @@ func (m StateModel) viewWithConfirmation() string {
 		msg = "Confirm? (y/N)"
 	}
 	confirmStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("#45475a")).
-		Foreground(lipgloss.Color("#cdd6f4")).
+		Background(selectedBg).
+		Foreground(textColor).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#f38ba8")).
+		BorderForeground(destroyColor).
 		Padding(0, 2)
 	var b strings.Builder
 	b.WriteString(headerStyle.Render("🔺 Terra-Prism - State Viewer"))
