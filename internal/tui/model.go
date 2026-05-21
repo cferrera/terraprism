@@ -910,25 +910,6 @@ func (m *Model) setDisplayedFoldsCollapsed(collapsed bool) {
 	}
 }
 
-// expandAll expands all visible (filtered/sorted) resources
-func (m *Model) expandAll() {
-	for _, idx := range m.displayedResourceIndices() {
-		m.expanded[idx] = true
-	}
-	m.updateViewportContent()
-	m.ensureCursorVisible()
-}
-
-// collapseAll collapses all visible (filtered/sorted) resources
-func (m *Model) collapseAll() {
-	for _, idx := range m.displayedResourceIndices() {
-		m.expanded[idx] = false
-	}
-	m.blockCursor = -1
-	m.updateViewportContent()
-	m.ensureCursorVisible()
-}
-
 // expandEverything expands all visible resources and their nested fold blocks.
 func (m *Model) expandEverything() {
 	for _, idx := range m.displayedResourceIndices() {
