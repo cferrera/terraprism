@@ -231,11 +231,11 @@ func pickerEntryStatus(status string) (label string, style lipgloss.Style) {
 	s := lipgloss.NewStyle()
 	switch status {
 	case "success":
-		return "[SUCCESS]", s.Foreground(lipgloss.Color("#a6e3a1"))
+		return "[SUCCESS]", s.Foreground(createColor)
 	case "failed":
-		return "[FAILED]", s.Foreground(lipgloss.Color("#f38ba8"))
+		return "[FAILED]", s.Foreground(destroyColor)
 	case "cancelled":
-		return "[CANCELLED]", s.Foreground(lipgloss.Color("#fab387"))
+		return "[CANCELLED]", s.Foreground(updateColor)
 	default:
 		return "", s
 	}
@@ -253,7 +253,7 @@ func pickerTruncatePath(path string, maxLen int) string {
 
 func (m PickerModel) pickerViewEntries(b *strings.Builder) {
 	if len(m.filtered) == 0 {
-		noResultStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")).Italic(true)
+		noResultStyle := lipgloss.NewStyle().Foreground(mutedColorVal).Italic(true)
 		if m.searchQuery != "" {
 			b.WriteString(noResultStyle.Render(fmt.Sprintf("  No results for '%s'", m.searchQuery)))
 		} else {
@@ -279,14 +279,14 @@ func (m PickerModel) pickerViewEntries(b *strings.Builder) {
 		}
 	}
 	if startIdx > 0 {
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")).Render(fmt.Sprintf("  ↑ %d more entries above", startIdx)))
+		b.WriteString(lipgloss.NewStyle().Foreground(mutedColorVal).Render(fmt.Sprintf("  ↑ %d more entries above", startIdx)))
 		b.WriteString("\n")
 	}
 	for i := startIdx; i < endIdx; i++ {
 		m.pickerWriteEntryLine(b, i)
 	}
 	if endIdx < len(m.filtered) {
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")).Render(fmt.Sprintf("  ↓ %d more entries below", len(m.filtered)-endIdx)))
+		b.WriteString(lipgloss.NewStyle().Foreground(mutedColorVal).Render(fmt.Sprintf("  ↓ %d more entries below", len(m.filtered)-endIdx)))
 		b.WriteString("\n")
 	}
 }
@@ -296,7 +296,7 @@ func (m PickerModel) pickerWriteEntryLine(b *strings.Builder, i int) {
 	cursor, style := "  ", lipgloss.NewStyle()
 	if i == m.cursor {
 		cursor = "> "
-		style = lipgloss.NewStyle().Background(lipgloss.Color("#313244")).Foreground(lipgloss.Color("#cdd6f4")).Bold(true)
+		style = lipgloss.NewStyle().Background(selectedBg).Foreground(textColor).Bold(true)
 	}
 	statusLabel, statusStyle := pickerEntryStatus(entry.Status)
 	path := pickerTruncatePath(entry.WorkingDir, 40)
@@ -317,19 +317,19 @@ func (m PickerModel) pickerWriteEntryLine(b *strings.Builder, i int) {
 
 func (m PickerModel) pickerViewFooter(b *strings.Builder) {
 	if m.searching {
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#f9e2af")).Bold(true).Render("/ "))
+		b.WriteString(lipgloss.NewStyle().Foreground(updateColor).Bold(true).Render("/ "))
 		b.WriteString(m.searchQuery)
 		b.WriteString("█")
 		return
 	}
 	if m.searchQuery != "" {
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#f9e2af")).Render(fmt.Sprintf("Filter: %s", m.searchQuery)))
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")).Render(fmt.Sprintf("  (%d/%d)", len(m.filtered), len(m.allEntries))))
+		b.WriteString(lipgloss.NewStyle().Foreground(updateColor).Render(fmt.Sprintf("Filter: %s", m.searchQuery)))
+		b.WriteString(lipgloss.NewStyle().Foreground(mutedColorVal).Render(fmt.Sprintf("  (%d/%d)", len(m.filtered), len(m.allEntries))))
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")).Render("j/k/↑↓: navigate  d/u: scroll  enter: select  esc: clear filter  q: cancel"))
+		b.WriteString(lipgloss.NewStyle().Foreground(mutedColorVal).Render("j/k/↑↓: navigate  d/u: scroll  enter: select  esc: clear filter  q: cancel"))
 		return
 	}
-	b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")).Render("j/k/↑↓: navigate  d/u: scroll  /: search  enter: select  q: cancel"))
+	b.WriteString(lipgloss.NewStyle().Foreground(mutedColorVal).Render("j/k/↑↓: navigate  d/u: scroll  /: search  enter: select  q: cancel"))
 }
 
 func (m PickerModel) View() string {
@@ -337,9 +337,9 @@ func (m PickerModel) View() string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#89b4fa")).MarginBottom(1).Render("Select a history entry to view"))
+	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(headerColor).MarginBottom(1).Render("Select a history entry to view"))
 	b.WriteString("\n\n")
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")).Bold(true)
+	headerStyle := lipgloss.NewStyle().Foreground(mutedColorVal).Bold(true)
 	b.WriteString(headerStyle.Render("     TIMESTAMP        COMMAND  STATUS        PATH"))
 	b.WriteString("\n")
 	b.WriteString(headerStyle.Render(strings.Repeat("─", 95)))

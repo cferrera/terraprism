@@ -149,10 +149,10 @@ terraform plan -no-color | terraprism -p
 | `Enter` / `Space` | Toggle current resource or foldable sub-block |
 | `l` / `→` | Expand current resource or foldable sub-block |
 | `h` / `←` / `⌫` | Collapse current resource or foldable sub-block |
-| `e` | Expand all resources, or all foldable sub-blocks in the current scope |
-| `c` | Collapse all resources, or all foldable sub-blocks in the current scope |
-| `E` | Expand all visible resources and all nested foldable sub-blocks |
-| `C` | Collapse all visible resources and all nested foldable sub-blocks |
+| `e` | Expand the highlighted item and its foldable sub-blocks (scope) |
+| `c` | Collapse the highlighted item and its foldable sub-blocks (scope) |
+| `Shift+E` | Expand all visible resources and all nested foldable sub-blocks |
+| `Shift+C` | Collapse all visible resources and all nested foldable sub-blocks |
 
 Large maps, lists, and heredocs inside expanded resources become foldable sub-blocks. Large sub-blocks collapse by default; use `l`/`→` or `Enter`/`Space` to expand them, then `Ctrl+E`/`Ctrl+Y` to scroll through the expanded content without moving the selection. When a resource or sub-block is selected, `e` and `c` recursively expand or collapse the foldable content underneath that selection.
 

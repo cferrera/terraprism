@@ -481,25 +481,46 @@ func handleKeyEnter(m Model) (Model, tea.Cmd, bool) {
 	return m, nil, true
 }
 
+// handleKeyExpandAll expands the cursor's current scope recursively:
+//   - inside a sub-fold: that fold and its descendants
+//   - at root: the cursor's resource and all its sub-folds
+//
+// Use Shift+E (handleKeyExpandEverything) for a global expand across all resources.
 func handleKeyExpandAll(m Model) (Model, tea.Cmd, bool) {
-	if m.setCurrentScopeFoldsCollapsed(false) {
+	if m.blockCursor >= 0 && m.setCurrentScopeFoldsCollapsed(false) {
 		m.updateViewportContent()
 		m.ensureCursorVisible()
 		return m, nil, true
 	}
 
-	m.expandAll()
+	filtered := m.displayedResourceIndices()
+	if len(filtered) > 0 && m.cursor >= 0 && m.cursor < len(filtered) {
+		m.expanded[filtered[m.cursor]] = true
+		m.setCurrentScopeFoldsCollapsed(false)
+	}
+	m.updateViewportContent()
+	m.ensureCursorVisible()
 	return m, nil, true
 }
 
+// handleKeyCollapseAll collapses the cursor's current scope recursively.
+// Use Shift+C (handleKeyCollapseEverything) for a global collapse.
 func handleKeyCollapseAll(m Model) (Model, tea.Cmd, bool) {
-	if m.setCurrentScopeFoldsCollapsed(true) {
+	if m.blockCursor >= 0 && m.setCurrentScopeFoldsCollapsed(true) {
 		m.updateViewportContent()
 		m.ensureCursorVisible()
 		return m, nil, true
 	}
 
-	m.collapseAll()
+	filtered := m.displayedResourceIndices()
+	if len(filtered) > 0 && m.cursor >= 0 && m.cursor < len(filtered) {
+		idx := filtered[m.cursor]
+		m.setCurrentScopeFoldsCollapsed(true)
+		m.expanded[idx] = false
+		m.blockCursor = -1
+	}
+	m.updateViewportContent()
+	m.ensureCursorVisible()
 	return m, nil, true
 }
 
@@ -889,25 +910,6 @@ func (m *Model) setDisplayedFoldsCollapsed(collapsed bool) {
 	}
 }
 
-// expandAll expands all visible (filtered/sorted) resources
-func (m *Model) expandAll() {
-	for _, idx := range m.displayedResourceIndices() {
-		m.expanded[idx] = true
-	}
-	m.updateViewportContent()
-	m.ensureCursorVisible()
-}
-
-// collapseAll collapses all visible (filtered/sorted) resources
-func (m *Model) collapseAll() {
-	for _, idx := range m.displayedResourceIndices() {
-		m.expanded[idx] = false
-	}
-	m.blockCursor = -1
-	m.updateViewportContent()
-	m.ensureCursorVisible()
-}
-
 // expandEverything expands all visible resources and their nested fold blocks.
 func (m *Model) expandEverything() {
 	for _, idx := range m.displayedResourceIndices() {
@@ -1179,7 +1181,7 @@ func (m *Model) renderResources() string {
 	m.contentLineCount = lineCount
 
 	b.WriteString("\n")
-	eolStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086"))
+	eolStyle := lipgloss.NewStyle().Foreground(mutedColorVal)
 	b.WriteString(eolStyle.Render("── End of Plan ──"))
 	b.WriteString("\n")
 
@@ -2487,8 +2489,8 @@ func (m Model) viewConfirmationPrompt() string {
 		return ""
 	}
 	confirmStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("#f38ba8")).
-		Foreground(lipgloss.Color("#1e1e2e")).
+		Background(destroyColor).
+		Foreground(textColor).
 		Bold(true).
 		Padding(0, 2)
 	return "\n" + confirmStyle.Render("⚠️  Apply this plan? Press 'y' to confirm, any other key to cancel") + "\n\n"
@@ -2506,11 +2508,15 @@ func (m Model) viewHelpFooter() string {
 			return "y: confirm apply • any key: cancel"
 		}
 		applyHint := lipgloss.NewStyle().Foreground(createColor).Bold(true).Render("a: APPLY")
-		full := fmt.Sprintf("%s • j/k/↑↓: navigate • e/c: all • /: search • f: filter • s: sort • q: quit", applyHint)
+		full := fmt.Sprintf("%s • j/k/↑↓: navigate • e/c: scope • E/C: all • /: search • f: filter • s: sort • q: quit", applyHint)
 		if lipgloss.Width(full) <= maxWidth {
 			return full
 		}
-		return fmt.Sprintf("%s • j/k nav • e/c all • / search • q", applyHint)
+		medium := fmt.Sprintf("%s • j/k nav • e/c scope • E/C all • / search • q", applyHint)
+		if lipgloss.Width(medium) <= maxWidth {
+			return medium
+		}
+		return fmt.Sprintf("%s • j/k nav • e/c • / search • q", applyHint)
 	}
 
 	helpOptions := []string{
@@ -2539,7 +2545,7 @@ func (m Model) viewUpdateNudge() string {
 	if m.updateAvailable == "" {
 		return ""
 	}
-	nudgeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Italic(true)
+	nudgeStyle := lipgloss.NewStyle().Foreground(computedColor).Italic(true)
 	return "\n" + nudgeStyle.Render(fmt.Sprintf("Update available: v%s. Run 'terraprism upgrade' to update.", m.updateAvailable))
 }
 

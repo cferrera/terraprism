@@ -4,10 +4,9 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 )
 
-// Color palette variables - will be set based on background detection
+// Color palette - bound to terminal ANSI slots so the app follows the user's shell theme.
 var (
 	createColor   lipgloss.Color
 	destroyColor  lipgloss.Color
@@ -21,91 +20,50 @@ var (
 	computedColor lipgloss.Color
 )
 
-// Catppuccin Mocha (Dark) palette
-var darkPalette = map[string]string{
-	"green":    "#a6e3a1",
-	"red":      "#f38ba8",
-	"yellow":   "#f9e2af",
-	"mauve":    "#cba6f7",
-	"sapphire": "#74c7ec",
-	"blue":     "#89b4fa",
-	"teal":     "#94e2d5",
-	"text":     "#cdd6f4",
-	"subtext":  "#a6adc8",
-	"overlay":  "#7f849c",
-	"surface1": "#45475a",
-	"surface0": "#313244",
-	"mantle":   "#181825",
-	"base":     "#1e1e2e",
+// ANSI 16-color slot assignments. Terminals remap these per theme, so the app
+// inherits whatever palette the user has set in their shell.
+var ansiPalette = map[string]string{
+	"green":   "2",  // create
+	"red":     "1",  // destroy
+	"yellow":  "3",  // update
+	"magenta": "5",  // replace
+	"cyan":    "6",  // read / computed
+	"blue":    "4",  // header / info
+	"gray":    "8",  // muted / selection bg (bright black)
+	"text":    "",   // inherit terminal default foreground
 }
 
-// Catppuccin Latte (Light) palette
-var lightPalette = map[string]string{
-	"green":    "#40a02b",
-	"red":      "#d20f39",
-	"yellow":   "#df8e1d",
-	"mauve":    "#8839ef",
-	"sapphire": "#209fb5",
-	"blue":     "#1e66f5",
-	"teal":     "#179299",
-	"text":     "#4c4f69",
-	"subtext":  "#6c6f85",
-	"overlay":  "#8c8fa1",
-	"surface1": "#bcc0cc",
-	"surface0": "#ccd0da",
-	"mantle":   "#e6e9ef",
-	"base":     "#eff1f5",
-}
-
-// IsLightBackground returns true if terminal has a light background
+// IsLightBackground is retained for backward compatibility. With ANSI-bound
+// colors the terminal owns the palette, so this no longer drives styling.
 func IsLightBackground() bool {
-	return !termenv.HasDarkBackground()
+	return false
 }
 
 func init() {
-	// Initialize colors based on detected background
 	InitColors()
 }
 
-// InitColors sets the color palette based on terminal background
+// InitColors assigns the ANSI palette and (re)builds the lipgloss styles.
 func InitColors() {
-	if IsLightBackground() {
-		SetLightPalette()
-	} else {
-		SetDarkPalette()
-	}
+	createColor = lipgloss.Color(ansiPalette["green"])
+	destroyColor = lipgloss.Color(ansiPalette["red"])
+	updateColor = lipgloss.Color(ansiPalette["yellow"])
+	replaceColor = lipgloss.Color(ansiPalette["magenta"])
+	readColor = lipgloss.Color(ansiPalette["cyan"])
+	headerColor = lipgloss.Color(ansiPalette["blue"])
+	mutedColorVal = lipgloss.Color(ansiPalette["gray"])
+	selectedBg = lipgloss.Color(ansiPalette["gray"])
+	textColor = lipgloss.Color(ansiPalette["text"])
+	computedColor = lipgloss.Color(ansiPalette["cyan"])
 	initStyles()
 }
 
-// SetDarkPalette sets colors for dark backgrounds (Catppuccin Mocha)
-func SetDarkPalette() {
-	createColor = lipgloss.Color(darkPalette["green"])
-	destroyColor = lipgloss.Color(darkPalette["red"])
-	updateColor = lipgloss.Color(darkPalette["yellow"])
-	replaceColor = lipgloss.Color(darkPalette["mauve"])
-	readColor = lipgloss.Color(darkPalette["sapphire"])
-	selectedBg = lipgloss.Color(darkPalette["surface1"])
-	headerColor = lipgloss.Color(darkPalette["blue"])
-	mutedColorVal = lipgloss.Color(darkPalette["overlay"])
-	textColor = lipgloss.Color(darkPalette["text"])
-	computedColor = lipgloss.Color(darkPalette["teal"])
-	initStyles() // Reinitialize styles with new colors
-}
+// SetDarkPalette is kept for backward compatibility. Colors now follow the
+// terminal's ANSI palette, so explicit dark/light selection is unnecessary.
+func SetDarkPalette() { InitColors() }
 
-// SetLightPalette sets colors for light backgrounds (Catppuccin Latte)
-func SetLightPalette() {
-	createColor = lipgloss.Color(lightPalette["green"])
-	destroyColor = lipgloss.Color(lightPalette["red"])
-	updateColor = lipgloss.Color(lightPalette["yellow"])
-	replaceColor = lipgloss.Color(lightPalette["mauve"])
-	readColor = lipgloss.Color(lightPalette["sapphire"])
-	selectedBg = lipgloss.Color(lightPalette["surface1"])
-	headerColor = lipgloss.Color(lightPalette["blue"])
-	mutedColorVal = lipgloss.Color(lightPalette["overlay"])
-	textColor = lipgloss.Color(lightPalette["text"])
-	computedColor = lipgloss.Color(lightPalette["teal"])
-	initStyles() // Reinitialize styles with new colors
-}
+// SetLightPalette is kept for backward compatibility. See SetDarkPalette.
+func SetLightPalette() { InitColors() }
 
 // Styles - initialized after colors are set
 var (
@@ -294,16 +252,16 @@ func FormatStatusColored(status string) string {
 	switch status {
 	case "success":
 		label = "[SUCCESS]"
-		style = lipgloss.NewStyle().Foreground(createColor) // green
+		style = lipgloss.NewStyle().Foreground(createColor)
 	case "failed":
 		label = "[FAILED]"
-		style = lipgloss.NewStyle().Foreground(destroyColor) // red
+		style = lipgloss.NewStyle().Foreground(destroyColor)
 	case "cancelled":
 		label = "[CANCELLED]"
-		style = lipgloss.NewStyle().Foreground(updateColor) // yellow/orange
+		style = lipgloss.NewStyle().Foreground(updateColor)
 	case "pending":
 		label = "[PENDING]"
-		style = lipgloss.NewStyle().Foreground(lipgloss.Color("#fab387")) // orange
+		style = lipgloss.NewStyle().Foreground(updateColor)
 	case "nochanges":
 		return ""
 	default:
@@ -324,7 +282,7 @@ func FormatHistoryEntryColored(timestamp, command, status, path string) string {
 	case "destroy":
 		cmdStyle = cmdStyle.Foreground(destroyColor)
 	case "plan":
-		cmdStyle = cmdStyle.Foreground(lipgloss.Color("#89b4fa")) // blue
+		cmdStyle = cmdStyle.Foreground(headerColor)
 	}
 	cmdColored := cmdStyle.Render(cmdPadded)
 
@@ -343,7 +301,7 @@ func FormatHistoryEntryColored(timestamp, command, status, path string) string {
 		statusColored = lipgloss.NewStyle().Foreground(updateColor).Render(statusPadded)
 	case "pending":
 		statusPadded = fmt.Sprintf("%-12s", "[PENDING]")
-		statusColored = lipgloss.NewStyle().Foreground(lipgloss.Color("#fab387")).Render(statusPadded)
+		statusColored = lipgloss.NewStyle().Foreground(updateColor).Render(statusPadded)
 	default:
 		statusColored = statusPadded // no color, just spaces
 	}
