@@ -71,24 +71,49 @@ jobs:
       - name: Prepare release body
         id: body
         run: |
-          BODY_FILE="release-notes/${{ github.ref_name }}.md"
-          if [ -f "$BODY_FILE" ]; then
-            echo "path=$BODY_FILE" >> $GITHUB_OUTPUT
+          set -euo pipefail
+
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREV_TAG=$(git tag --sort=-v:refname | grep -v "^${CURRENT_TAG}$" | head -1 || true)
+
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="$(git rev-list --max-parents=0 HEAD)..HEAD"
+            RANGE_DESC="Initial release"
           else
-            echo "## terraprism ${{ github.ref_name }}" > release-body.md
-            echo "" >> release-body.md
-            echo "See commit history for changes." >> release-body.md
-            echo "path=release-body.md" >> $GITHUB_OUTPUT
+            RANGE="${PREV_TAG}..${CURRENT_TAG}"
+            RANGE_DESC="Changes since ${PREV_TAG}"
           fi
 
+          COMMITS=$(git log "$RANGE" --format='- %s (%h)' --no-merges || true)
+
+          {
+            echo "## terraprism ${CURRENT_TAG}"
+            echo
+            echo "### ${RANGE_DESC}"
+            echo
+            if [ -n "$COMMITS" ]; then
+              echo "$COMMITS"
+            else
+              echo "No changes in this release."
+            fi
+            echo
+            echo "### Install"
+            echo
+            echo '```bash'
+            echo "go install github.com/CaptShanks/terraprism/cmd/terraprism@${CURRENT_TAG}"
+            echo '```'
+            echo
+            echo "Or download the appropriate binary below and place it in your PATH."
+          } > release-body.md
+
+          echo "path=release-body.md" >> $GITHUB_OUTPUT
+
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/terraprism-*
             artifacts/checksums.txt
           body_path: ${{ steps.body.outputs.path }}
           generate_release_notes: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
