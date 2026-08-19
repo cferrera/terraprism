@@ -158,10 +158,7 @@ func parseNewFormat(plan *Plan, lines []string) {
 				Action:   parseActionFromLine(line),
 				RawLines: []string{line},
 			}
-			if parts := strings.Split(address, "."); len(parts) >= 2 {
-				currentResource.Type = parts[len(parts)-2]
-				currentResource.Name = parts[len(parts)-1]
-			}
+			parseResourceAddress(currentResource)
 			inResourceBlock = true
 			braceCount = 0
 			continue
@@ -191,25 +188,31 @@ func parseNewFormat(plan *Plan, lines []string) {
 
 var terraformAddressIdentRegex = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 
+// indexKeyRegex matches resource index keys, e.g. [0] or ["*.example.com"].
+// Keys may contain dots, so they must be stripped before splitting an address.
+var indexKeyRegex = regexp.MustCompile(`\[[^\]]*\]`)
+
 func isTerraformResourceAddress(address string) bool {
 	address = strings.TrimSpace(address)
 	if address == "" || strings.HasPrefix(address, "-") {
 		return false
 	}
-	parts := strings.Split(address, ".")
+	parts := addressParts(address)
 	if len(parts) < 2 {
 		return false
 	}
 	for _, part := range parts[len(parts)-2:] {
-		base := strings.TrimSpace(part)
-		if idx := strings.Index(base, "["); idx >= 0 {
-			base = base[:idx]
-		}
-		if !terraformAddressIdentRegex.MatchString(base) {
+		if !terraformAddressIdentRegex.MatchString(strings.TrimSpace(part)) {
 			return false
 		}
 	}
 	return true
+}
+
+// addressParts splits a resource address on "." after removing index keys,
+// so that keys containing dots (e.g. ["*.example.com"]) do not create parts.
+func addressParts(address string) []string {
+	return strings.Split(indexKeyRegex.ReplaceAllString(address, ""), ".")
 }
 
 type oldFormatResourcePattern struct {
@@ -294,7 +297,7 @@ func parseOldFormat(plan *Plan, lines []string) {
 }
 
 func parseResourceAddress(r *Resource) {
-	parts := strings.Split(r.Address, ".")
+	parts := addressParts(r.Address)
 	if len(parts) >= 2 {
 		r.Type = parts[len(parts)-2]
 		r.Name = parts[len(parts)-1]

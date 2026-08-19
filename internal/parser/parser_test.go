@@ -337,3 +337,45 @@ No changes. Infrastructure is up-to-date.
 		t.Errorf("Expected 0 resources, got %d", len(plan.Resources))
 	}
 }
+
+func TestParseNewFormatIndexKeyWithDots(t *testing.T) {
+	input := `Terraform will perform the following actions:
+
+  # cloudflare_dns_record.aliases["*.example.com"] will be updated in-place
+  # (imported from "abc/def")
+  ~ resource "cloudflare_dns_record" "aliases" {
+        name = "*.example.com"
+      ~ ttl  = 300 -> 1
+    }
+
+  # module.cdn[0].aws_route53_record.this["www.example.com"] will be created
+  + resource "aws_route53_record" "this" {
+      + name = "www.example.com"
+    }
+
+Plan: 1 to add, 1 to change, 0 to destroy.`
+
+	plan, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if len(plan.Resources) != 2 {
+		t.Fatalf("got %d resources, want 2: %+v", len(plan.Resources), plan.Resources)
+	}
+
+	first := plan.Resources[0]
+	if first.Address != `cloudflare_dns_record.aliases["*.example.com"]` {
+		t.Errorf("address = %q", first.Address)
+	}
+	if first.Type != "cloudflare_dns_record" || first.Name != "aliases" {
+		t.Errorf("type/name = %q/%q, want cloudflare_dns_record/aliases", first.Type, first.Name)
+	}
+	if first.Action != ActionUpdate {
+		t.Errorf("action = %q, want update", first.Action)
+	}
+
+	second := plan.Resources[1]
+	if second.Type != "aws_route53_record" || second.Name != "this" {
+		t.Errorf("type/name = %q/%q, want aws_route53_record/this", second.Type, second.Name)
+	}
+}
