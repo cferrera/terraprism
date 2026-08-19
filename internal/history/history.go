@@ -26,6 +26,14 @@ const (
 	// MaxHistoryFiles is the maximum number of history files to keep
 	// Older files are automatically cleaned up
 	MaxHistoryFiles = 100
+
+	// MaxHistoryAge is how long a history file is kept before it is deleted.
+	// Plan output contains infrastructure detail, so it is not retained beyond this.
+	MaxHistoryAge = time.Hour
+
+	// dirPerm/filePerm keep history owner-only: plan output is sensitive.
+	dirPerm  = 0o700
+	filePerm = 0o600
 )
 
 // Entry represents a history file entry
@@ -55,8 +63,13 @@ func EnsureHistoryDir() (string, error) {
 		return "", err
 	}
 
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return "", fmt.Errorf("failed to create history directory: %w", err)
+	}
+	// MkdirAll is a no-op on an existing directory, so tighten it explicitly
+	// for anyone upgrading from a version that created it 0755.
+	if err := os.Chmod(dir, dirPerm); err != nil {
+		return "", fmt.Errorf("failed to set history directory permissions: %w", err)
 	}
 
 	return dir, nil
@@ -113,7 +126,7 @@ func CreateHistoryFile(command string, content string) (string, error) {
 	filename := GenerateFilename(command)
 	path := filepath.Join(dir, filename)
 
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), filePerm); err != nil {
 		return "", fmt.Errorf("failed to write history file: %w", err)
 	}
 
@@ -122,7 +135,7 @@ func CreateHistoryFile(command string, content string) (string, error) {
 
 // AppendToHistoryFile appends content to an existing history file
 func AppendToHistoryFile(path string, content string) error {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, filePerm)
 	if err != nil {
 		return fmt.Errorf("failed to open history file: %w", err)
 	}
@@ -232,21 +245,22 @@ func ListEntries(filterCommand string) ([]Entry, error) {
 	return entries, nil
 }
 
-// CleanupOldFiles removes old history files if count exceeds MaxHistoryFiles
+// CleanupOldFiles removes history files older than MaxHistoryAge, plus any
+// beyond MaxHistoryFiles. Called at the start of every plan/apply/destroy run.
 func CleanupOldFiles() (int, error) {
 	entries, err := ListEntries("")
 	if err != nil {
 		return 0, err
 	}
 
-	if len(entries) <= MaxHistoryFiles {
-		return 0, nil
-	}
-
-	// Entries are sorted newest first, so delete from the end
+	cutoff := time.Now().Add(-MaxHistoryAge)
 	deleted := 0
-	for i := MaxHistoryFiles; i < len(entries); i++ {
-		if err := os.Remove(entries[i].Path); err == nil {
+	// Entries are sorted newest first, so anything past MaxHistoryFiles is surplus.
+	for i, e := range entries {
+		if i < MaxHistoryFiles && e.Timestamp.After(cutoff) {
+			continue
+		}
+		if err := os.Remove(e.Path); err == nil {
 			deleted++
 		}
 	}
@@ -268,7 +282,10 @@ func parseFilename(filename string) (Entry, error) {
 	// Parse timestamp (first two parts: date and time)
 	dateStr := parts[0]
 	timeStr := parts[1]
-	timestamp, err := time.Parse("2006-01-02_15-04-05", dateStr+"_"+timeStr)
+	// Filenames are generated from time.Now(), i.e. local time, so they must be
+	// parsed as local time too - time.Parse would assume UTC and skew every
+	// timestamp (and the MaxHistoryAge cutoff) by the zone offset.
+	timestamp, err := time.ParseInLocation("2006-01-02_15-04-05", dateStr+"_"+timeStr, time.Local)
 	if err != nil {
 		return Entry{}, fmt.Errorf("invalid timestamp: %w", err)
 	}

@@ -1,9 +1,11 @@
-.PHONY: build test clean install lint run help
+.PHONY: build test clean install lint run help docker-build docker-build-mac
 
 # Build variables
 BINARY_NAME=terraprism
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_DIR=bin
+# uname -m spellings differ from Go's; normalise for the docker cross-build targets
+HOST_ARCH?=$(shell uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
 GO_FILES=$(shell find . -name '*.go' -type f)
 LDFLAGS=-ldflags "-s -w -X main.version=$(VERSION)"
 
@@ -64,6 +66,17 @@ run: build
 demo: build
 	@echo "Terraform will perform the following actions:" | cat - testdata/sample-plan.txt 2>/dev/null | ./$(BUILD_DIR)/$(BINARY_NAME) || \
 		echo "No sample plan found. Create testdata/sample-plan.txt or pipe real terraform output."
+
+## docker-build: Build a Linux binary in Docker (no local Go toolchain needed)
+docker-build:
+	docker build -o dist --build-arg VERSION=$(VERSION) .
+	@file dist/terraprism
+
+## docker-build-mac: Build a macOS binary in Docker for this host's arch
+docker-build-mac:
+	docker build -o dist --build-arg VERSION=$(VERSION) \
+		--build-arg GOOS=darwin --build-arg GOARCH=$(HOST_ARCH) .
+	@file dist/terraprism
 
 ## deps: Download dependencies
 deps:

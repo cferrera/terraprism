@@ -13,7 +13,6 @@ import (
 	"github.com/muesli/reflow/wordwrap"
 
 	"github.com/CaptShanks/terraprism/internal/parser"
-	"github.com/CaptShanks/terraprism/internal/updater"
 )
 
 // Model represents the TUI state
@@ -54,15 +53,6 @@ type Model struct {
 	sortOrder  SortOrder // default, byAction, byAddress, byType
 	sorting    bool      // sort picker is open
 	sortCursor int       // cursor in sort picker
-
-	// Update nudge
-	currentVersion  string // for update check
-	updateAvailable string // non-empty when newer version available
-}
-
-// UpdateAvailableMsg is sent when an update check finds a newer version.
-type UpdateAvailableMsg struct {
-	Version string
 }
 
 // SortOrder defines how resources are ordered
@@ -180,48 +170,46 @@ func (m *Model) displayedResourceIndices() []int {
 }
 
 // NewModel creates a new TUI model (view-only mode)
-func NewModel(plan *parser.Plan, version string) Model {
+func NewModel(plan *parser.Plan) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Search..."
 	ti.CharLimit = 100
 	ti.Width = 40
 
 	return Model{
-		plan:           plan,
-		expanded:       make(map[int]bool),
-		foldedBlocks:   make(map[string]bool),
-		blockCursor:    -1,
-		diffContext:    defaultDiffContext,
-		searchInput:    ti,
-		searchMatches:  []int{},
-		applyMode:      false,
-		statusFilters:  nil, // nil = show all
-		sortOrder:      SortDefault,
-		currentVersion: version,
+		plan:          plan,
+		expanded:      make(map[int]bool),
+		foldedBlocks:  make(map[string]bool),
+		blockCursor:   -1,
+		diffContext:   defaultDiffContext,
+		searchInput:   ti,
+		searchMatches: []int{},
+		applyMode:     false,
+		statusFilters: nil, // nil = show all
+		sortOrder:     SortDefault,
 	}
 }
 
 // NewModelWithApply creates a TUI model with apply capability
-func NewModelWithApply(plan *parser.Plan, planFile, tfCommand, version string) Model {
+func NewModelWithApply(plan *parser.Plan, planFile, tfCommand string) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Search..."
 	ti.CharLimit = 100
 	ti.Width = 40
 
 	return Model{
-		plan:           plan,
-		expanded:       make(map[int]bool),
-		foldedBlocks:   make(map[string]bool),
-		blockCursor:    -1,
-		diffContext:    defaultDiffContext,
-		searchInput:    ti,
-		searchMatches:  []int{},
-		applyMode:      true,
-		planFile:       planFile,
-		tfCommand:      tfCommand,
-		statusFilters:  nil, // nil = show all
-		sortOrder:      SortDefault,
-		currentVersion: version,
+		plan:          plan,
+		expanded:      make(map[int]bool),
+		foldedBlocks:  make(map[string]bool),
+		blockCursor:   -1,
+		diffContext:   defaultDiffContext,
+		searchInput:   ti,
+		searchMatches: []int{},
+		applyMode:     true,
+		planFile:      planFile,
+		tfCommand:     tfCommand,
+		statusFilters: nil, // nil = show all
+		sortOrder:     SortDefault,
 	}
 }
 
@@ -232,21 +220,7 @@ func (m Model) ShouldApply() bool {
 
 // Init initializes the model
 func (m Model) Init() tea.Cmd {
-	if m.currentVersion == "" || updater.IsSkipUpdateCheck() {
-		return nil
-	}
-	return checkUpdateCmd(m.currentVersion)
-}
-
-// checkUpdateCmd runs an async update check and sends UpdateAvailableMsg if an update is available.
-func checkUpdateCmd(version string) tea.Cmd {
-	return func() tea.Msg {
-		latest, hasUpdate, err := updater.CheckLatestWithCache(version, updater.UpdateCheckIntervalDays())
-		if err != nil || !hasUpdate {
-			return nil
-		}
-		return UpdateAvailableMsg{Version: latest}
-	}
+	return nil
 }
 
 // Update handles messages
@@ -255,25 +229,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
-	case UpdateAvailableMsg:
-		m.updateAvailable = msg.Version
-		// Resize viewport to account for the extra footer line
-		if m.ready && m.height > 0 {
-			headerHeight := 4
-			footerHeight := 4 // help + nudge
-			m.viewport.Height = m.height - headerHeight - footerHeight
-		}
-		return m, nil
-
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 
 		headerHeight := 4 // Title + summary + blank line
 		footerHeight := 3 // Help text
-		if m.updateAvailable != "" {
-			footerHeight = 4 // +1 for update nudge line
-		}
 
 		if !m.ready {
 			m.viewport = viewport.New(msg.Width-4, msg.Height-headerHeight-footerHeight)
@@ -2540,15 +2501,6 @@ func (m Model) viewHelpFooter() string {
 	return helpOptions[len(helpOptions)-1]
 }
 
-// viewUpdateNudge renders the update available nudge.
-func (m Model) viewUpdateNudge() string {
-	if m.updateAvailable == "" {
-		return ""
-	}
-	nudgeStyle := lipgloss.NewStyle().Foreground(computedColor).Italic(true)
-	return "\n" + nudgeStyle.Render(fmt.Sprintf("Update available: v%s. Run 'terraprism upgrade' to update.", m.updateAvailable))
-}
-
 // View renders the UI
 func (m Model) View() string {
 	if !m.ready {
@@ -2570,6 +2522,5 @@ func (m Model) View() string {
 	b.WriteString(m.viewport.View())
 	b.WriteString("\n")
 	b.WriteString(helpStyle.Render(m.viewHelpFooter()))
-	b.WriteString(m.viewUpdateNudge())
 	return appStyle.Render(b.String())
 }

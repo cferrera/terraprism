@@ -20,6 +20,117 @@
 
 ---
 
+# This fork
+
+Everything below this section is upstream's original README, unchanged. This
+section describes how this fork differs and supersedes it wherever the two
+disagree — specifically the **Installation**, **Upgrading**, **Commands**, and
+**Environment Variables** sections still document the update machinery that has
+been removed here.
+
+## What changed
+
+Every network call was removed, and plan output is stored more carefully.
+
+| Change | Detail |
+|---|---|
+| **No phone-home** | The `internal/updater` package is deleted. The TUI no longer runs a background GitHub release check on startup, and `terraprism version` no longer checks for updates. |
+| **No token access** | Upstream's update library read `GITHUB_TOKEN` from your environment — falling back to `github.token` in your git config — and sent it to api.github.com. That code path no longer exists. |
+| **No self-update** | `terraprism upgrade` is removed; it now exits 1 with a pointer to rebuild. Upstream downloaded and swapped the running binary with **no checksum or signature verification**, despite the release workflow publishing a `checksums.txt` that nothing ever read. |
+| **Tighter history** | `~/.terraprism/` is now `0700` and history files `0600` (was `0755`/`0644`, i.e. readable by any other local user). Files are deleted once **older than 1 hour**, checked at the start of every plan/apply/destroy run. |
+
+The binary no longer links `net`, `net/http`, or `crypto/tls` at all — it is
+structurally incapable of making a network connection, not merely configured not
+to. Verify for yourself:
+
+```bash
+go list -deps ./cmd/terraprism | grep -E '^(net|net/http|crypto/tls)$'   # no output
+```
+
+Dropping the updater also removed 9 transitive dependencies, including
+`go-github`, `oauth2`, and versions of `golang.org/x/net` and `x/crypto` from
+2019 and 2020. What remains is the Charm TUI stack only.
+
+**Bug fixed along the way:** history filenames were written in local time but
+parsed as UTC, so every timestamp — and therefore the retention cutoff — was
+skewed by your zone offset. In UTC+2 a "1 hour" cutoff retained files for three.
+
+**Still worth knowing:** `terraprism apply` writes a binary plan file to
+`$TMPDIR/terraprism-<pid>.tfplan`. Unlike the text history, binary plan files
+contain *unredacted* values. It is removed on exit, but not if the process is
+killed. On Linux, where `/tmp` is shared, treat that path as sensitive.
+
+## Build and install
+
+Build from source. **Do not use the `curl | sh` quick install or the release
+binaries documented below** — those are upstream's and still contain everything
+listed above.
+
+Requires Go 1.24+:
+
+```bash
+make build                          # -> bin/terraprism
+```
+
+Or with Docker, if you would rather not install a Go toolchain:
+
+```bash
+make docker-build                   # -> dist/terraprism   (Linux, host arch)
+make docker-build-mac               # -> dist/terraprism   (macOS, host arch)
+```
+
+The container is always Linux, so `docker-build` produces a Linux binary even on
+a Mac — hence the second target. Both write to the same path, so the last one you
+ran wins; each prints `file dist/terraprism` afterwards so you can tell which you
+have. For any other target:
+
+```bash
+docker build -o dist --build-arg GOOS=windows --build-arg GOARCH=amd64 .
+docker build -o dist --build-arg VERSION=0.12.0-local .
+```
+
+Where the binary lands:
+
+| Command | Output |
+|---|---|
+| `make` / `make build` | `bin/terraprism` |
+| `make docker-build` / `make docker-build-mac` | `dist/terraprism` |
+| `make release` | `bin/terraprism-<os>-<arch>`, all five platforms |
+
+Then put it on your `PATH` — `~/.local/bin` needs no sudo:
+
+```bash
+install -m 0755 bin/terraprism ~/.local/bin/terraprism
+```
+
+Note that `make install` runs `go install`, which writes to `~/go/bin` — a
+different directory, and probably not on your `PATH`.
+
+## Upgrading this fork
+
+There is no self-update and no update check. Pull and rebuild:
+
+```bash
+git pull && make build
+```
+
+## Verify
+
+```bash
+make test
+terraprism --version    # must return instantly and never mention an update
+```
+
+Retention and permissions are covered by `internal/history/history_test.go`.
+Both limits are constants in `internal/history/history.go` — `MaxHistoryAge`
+(1 hour) and `MaxHistoryFiles` (100) — if you want different retention.
+
+Cleanup is triggered by running terraprism, not by a daemon: if you stop using
+it, whatever was written in the last hour stays until the next run. Add
+`rm -f ~/.terraprism/*.txt` to a logout hook if you need a harder guarantee.
+
+---
+
 <p align="center">
   <img src="assets/demo.gif" alt="Terra-Prism Demo" width="800">
 </p>

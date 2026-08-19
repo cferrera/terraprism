@@ -53,23 +53,29 @@ golangci-lint run ./...
 | `charmbracelet/bubbles` v0.21.0 | Pre-built TUI components |
 | `charmbracelet/lipgloss` v1.1.0 | Terminal styling and layout |
 | `muesli/reflow` v0.3.0 | Text wrapping and padding |
-| `blang/semver` v4.0.0 | Semantic versioning |
-| `rhysd/go-github-selfupdate` v1.2.3 | GitHub release-based self-update |
+
+No non-TUI dependencies. `blang/semver` and `rhysd/go-github-selfupdate` were
+removed with the updater; adding anything that opens a socket is a design change,
+not a dependency bump.
 
 ## Architecture Decisions
 
 1. **Elm Architecture (TEA):** TUI follows Bubble Tea's Model-Update-View pattern
 2. **Parser separation:** `internal/parser` is independent of TUI, produces structured data
-3. **Self-update:** Binary self-updates via GitHub releases with `-ldflags` version injection
+3. **No self-update:** Version is injected with `-ldflags`; upgrading means rebuilding from source
 4. **Internal packages:** All under `internal/` for free refactoring
 5. **Piped input:** Reads from stdin, composable with shell pipelines
 
 ## Security Considerations
 
-- Terraform plan JSON may contain sensitive attributes (passwords, keys, connection strings)
-- Never log or persist raw plan data beyond the current session
-- Self-update downloads must verify checksums
-- No network calls except self-update checks
+- Terraform plan output may contain sensitive attributes (passwords, keys, connection strings)
+- **The binary makes no network calls.** There is no updater, no telemetry, and no
+  code that reads `GITHUB_TOKEN`. Do not reintroduce one.
+- Plan/apply output is persisted to `~/.terraprism/` (`0700` dir, `0600` files) and
+  deleted once older than `history.MaxHistoryAge` (1 hour), enforced at the start of
+  every plan/apply/destroy run
+- Binary plan files (`$TMPDIR/terraprism-<pid>.tfplan`) hold unredacted values and are
+  removed on exit
 
 ## PR Guidelines
 

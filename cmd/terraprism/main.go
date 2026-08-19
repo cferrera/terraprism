@@ -12,7 +12,6 @@ import (
 	"github.com/CaptShanks/terraprism/internal/history"
 	"github.com/CaptShanks/terraprism/internal/parser"
 	"github.com/CaptShanks/terraprism/internal/tui"
-	"github.com/CaptShanks/terraprism/internal/updater"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -106,8 +105,8 @@ func main() {
 		runVersionMode()
 		return
 	case "upgrade":
-		runUpgradeMode()
-		return
+		fmt.Fprintln(os.Stderr, "terraprism has no self-update. Rebuild from source: git pull && make build")
+		os.Exit(1)
 	}
 	runViewMode(args)
 }
@@ -209,7 +208,7 @@ func runApplyMode(args []string, isDestroy bool) {
 		os.Exit(0)
 	}
 
-	model := tui.NewModelWithApply(plan, planFile, tfCmd, version)
+	model := tui.NewModelWithApply(plan, planFile, tfCmd)
 	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	finalModel, err := p.Run()
 	if err != nil {
@@ -294,7 +293,7 @@ func runPlanMode(args []string) {
 
 	// Go straight to TUI
 	p := tea.NewProgram(
-		tui.NewModel(plan, version),
+		tui.NewModel(plan),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
@@ -412,7 +411,7 @@ func runHistoryList(args []string) {
 		fmt.Printf("%3d  %s\n", i+1, formatted)
 	}
 
-	fmt.Printf("\nTotal: %d entries (max: %d)\n", len(entries), history.MaxHistoryFiles)
+	fmt.Printf("\nTotal: %d entries (max: %d, retained for %s)\n", len(entries), history.MaxHistoryFiles, history.MaxHistoryAge)
 	fmt.Println("\nUse 'terraprism history view <#>' to view a specific entry")
 }
 
@@ -501,7 +500,7 @@ func runHistoryView(args []string) {
 	}
 
 	p := tea.NewProgram(
-		tui.NewModel(plan, version),
+		tui.NewModel(plan),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
@@ -649,33 +648,6 @@ func runVersionMode() {
 		fmt.Fprintf(os.Stderr, "  %s not found or failed to run\n", tfCmd)
 	}
 
-	// Check for updates (skip if disabled)
-	if !updater.IsSkipUpdateCheck() {
-		if latest, hasUpdate, err := updater.CheckLatest(version); err == nil && hasUpdate {
-			fmt.Printf("\nUpdate available: v%s. Run 'terraprism upgrade' to update (or re-run the install script).\n", latest)
-		}
-	}
-}
-
-// runUpgradeMode upgrades terraprism to the latest version
-func runUpgradeMode() {
-	_, hasUpdate, err := updater.CheckLatest(version)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error checking for updates: %v\n", err)
-		fmt.Println(updater.CurlFallbackMessage(err))
-		os.Exit(1)
-	}
-	if !hasUpdate {
-		fmt.Println("Already up to date.")
-		return
-	}
-
-	newVer, err := updater.Upgrade(version)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", updater.CurlFallbackMessage(err))
-		os.Exit(1)
-	}
-	fmt.Printf("Upgraded to v%s. Restart terraprism to use the new version.\n", newVer)
 }
 
 // runViewMode is the default pipe/file view mode
@@ -745,7 +717,7 @@ func runViewMode(args []string) {
 	}
 
 	p := tea.NewProgram(
-		tui.NewModel(plan, version),
+		tui.NewModel(plan),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
@@ -780,20 +752,17 @@ COMMANDS:
     state list|show|rm   Interactive state TUI (search, sort, taint, untaint)
     history     View and manage plan/apply history
     version     Show terraprism and terraform/tofu versions
-    upgrade     Upgrade terraprism to the latest release
     init, validate, fmt, output, state mv, import, workspace, graph,
     console, login, logout, providers, force-unlock, show, refresh,
     taint, untaint   Pass through to terraform/tofu
 
 GLOBAL OPTIONS:
     -h, --help      Show this help
-    -v, --version   Show version (includes update check)
+    -v, --version   Show version
 
 ENVIRONMENT:
     TERRAPRISM_TOFU   Set to 1, true, or yes to use OpenTofu
     TERRAPRISM_THEME  Set to "light" or "dark" to force theme
-    TERRAPRISM_SKIP_UPDATE_CHECK  Set to 1, true, or yes to skip update checks
-    TERRAPRISM_UPDATE_CHECK_INTERVAL  Days between TUI update checks (default: 7)
 
 VIEW OPTIONS:
     -p, --print     Print mode (no TUI)
@@ -811,7 +780,8 @@ CONTROLS:
     q/Esc       Quit
 
 HISTORY:
-    All plan and apply outputs are saved to ~/.terraprism/
+    All plan and apply outputs are saved to ~/.terraprism/ (0700 dir, 0600 files)
+    and deleted automatically once older than 1 hour.
     Use 'terraprism history' to list them.
 
 EXAMPLES:
